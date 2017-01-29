@@ -124,7 +124,14 @@ void BFGenerator::RenderGlyph_Simpe()
 
     // Размываем, если нужно.
     if (blurDistance > 0)
+    {
         glyphManipulator.Blur(blurDistance);
+
+        // Так как размытые глифы предназначены для создания теней, то их центр должен
+        // совпадать с центром неразмытого глифа.
+        xOffset_ -= blurDistance;
+        yOffset_ -= blurDistance;
+    }
 
     SharedPtr<Image> resultImage = ConvertToImage(glyphManipulator, mainColor_);
     PackGlyph(resultImage);
@@ -158,7 +165,11 @@ void BFGenerator::RenderGlyph_Contour()
     lineHeight_ += strokeThickness;
 
     if (blurDistance > 0)
+    {
         glyphManipulator.Blur(blurDistance);
+        xOffset_ -= blurDistance;
+        yOffset_ -= blurDistance;
+    }
 
     SharedPtr<Image> resultImage = ConvertToImage(glyphManipulator, strokeColor_);
     PackGlyph(resultImage);
@@ -202,14 +213,16 @@ void BFGenerator::RenderGlyph_Outlined()
 
     // Смещение нормального изображения относительно раздутого.
     // Оно не всегда равно толщине обводки. Поэтому вычисляем так.
-    int offsetX = normalGlyphLeft - inflatedGlyphLeft;
-    int offsetY = inflatedGlyphTop - normalGlyphTop;
+    int deltaX = normalGlyphLeft - inflatedGlyphLeft;
+    int deltaY = inflatedGlyphTop - normalGlyphTop;
 
     if (blurDistance > 0)
     {
         inflatedGlyph.Blur(blurDistance);
-        offsetX += blurDistance;
-        offsetY += blurDistance;
+        deltaX += blurDistance;
+        deltaY += blurDistance;
+        xOffset_ -= blurDistance;
+        yOffset_ -= blurDistance;
     }
     
     SharedPtr<Image> resultImage = ConvertToImage(inflatedGlyph, strokeColor_);
@@ -226,13 +239,13 @@ void BFGenerator::RenderGlyph_Outlined()
         {
             for (int y = 0; y < normalGlyph.height_; ++y)
             {
-                Color backColor = resultImage->GetPixel(x + offsetX, y + offsetY);
+                Color backColor = resultImage->GetPixel(x + deltaX, y + deltaY);
                 float mask = normalGlyph.GetPixel(x, y);
                 float r = mask * mainColor_.r_ + backColor.r_ * (1.0f - mask);
                 float g = mask * mainColor_.g_ + backColor.g_ * (1.0f - mask);
                 float b = mask * mainColor_.b_ + backColor.b_ * (1.0f - mask);
                 float a = mask * mainColor_.a_ + backColor.a_ * (1.0f - mask);
-                resultImage->SetPixel(x + offsetX, y + offsetY, Color(r, g, b, a));
+                resultImage->SetPixel(x + deltaX, y + deltaY, Color(r, g, b, a));
             }
         }
     }
@@ -245,7 +258,7 @@ void BFGenerator::RenderGlyph_Outlined()
 }
 
 // Наложение полупрозрачного изображения на другое полупрозрачное изображение
-// (полная вресия альфаблендинга без упрощения, что фон считается непрозрачным).
+// (полная версия альфаблендинга без упрощения, что фон считается непрозрачным).
 // На входе ожидаются цвета с straight альфой (не premultiplied).
 // Рендеринг глифов с тенью я убрал, но функцию оставил. Вдруг когда-то пригодится.
 static inline Color MixColors(const Color& front, const Color& back)
@@ -375,7 +388,7 @@ void BFGenerator::RenderGlyph_Sdf()
     FT_Done_Glyph(glyph);
 
     // У глифа может не быть изображения, но он может занимать какую-то площадь
-    // при выводе текста, поэтому он будет сохранен в XML-файл.
+    // при выводе текста (например пробел), поэтому он будет сохранен в XML-файл.
     if (glyphManipulator.width_ == 0 || glyphManipulator.height_ == 0)
     {
         x_ = 0;
