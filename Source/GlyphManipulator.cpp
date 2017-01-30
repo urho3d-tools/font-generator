@@ -34,7 +34,6 @@ GlyphManipulator::GlyphManipulator(const FT_BitmapGlyph bitmapGlyph)
         // а значит pitch эквивалентен width.
         for (int i = 0; i < width_ * height_; ++i)
             pixels_[i] = (float)bitmapGlyph->bitmap.buffer[i] / 255.0f;
-
     }
 }
 
