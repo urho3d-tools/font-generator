@@ -11,7 +11,7 @@ https://github.com/1vanK/Urho3DBitmapFontGenerator/blob/master/Bin/MyData/Shader
 
 2) SDF fonts render with large scale and after it downscaled to required size. You can decrease "Scale" parameter to fast generation or increase to improve quality.
 
-3) Do not use large radius for thin fonts: stroke effect will look bad.
+3) Do not use large distance for thin fonts: stroke effect will look bad.
 
 ![Screenshot](https://raw.githubusercontent.com/1vanK/Urho3DBitmapFontGenerator/master/SDF.png)
 
