@@ -2,8 +2,6 @@
 
 License: Public Domain
 
-Current status: no kerning support
-
 ## SDF
 
 1) SDF generator uses true brute force on GPU for maximum quality. Currently exists only GLSL shader for it:

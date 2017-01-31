@@ -417,7 +417,7 @@ void BFGenerator::RenderGlyph_Sdf()
 
     PackGlyph(resultImage);
 
-    // Граница немного расширяется, иначе некоторые глифы (о, а, ...)
+    // Граница расширяется на 1 лишний пиксель в каждую сторону, иначе некоторые глифы (о, а, ...)
     // некоторых кривых шрифтов (Anonimous Pro) будут обрезаны при отображении в Урхо.
     x_ = x_ + radius - 1;
     y_ = y_ + radius - 1;
@@ -498,9 +498,11 @@ void BFGenerator::Generate(const char* fontFileName, int fontHeight, BF_Style st
             RenderGlyph_Sdf();
 
         count_++;
-        SaveGlyph();
+        StoreGlyph();
         charCode = FT_Get_Next_Char(face_, charCode, &glyphIndex_);
     }
+
+    StoreKerning();
 
     FT_Done_Face(face_);
 
@@ -539,7 +541,7 @@ void BFGenerator::Save(const String& fileName)
     xmlFile_->SaveFile(fileName);
 }
 
-void BFGenerator::SaveGlyph()
+void BFGenerator::StoreGlyph()
 {
     XMLElement element = xmlFile_->GetOrCreateRoot("font").GetOrCreateChild("chars").CreateChild("char");
     element.SetAttribute("id", String(id_));
@@ -588,4 +590,114 @@ void BFGenerator::CalculateMetrics()
     xAdvance_ = face_->glyph->metrics.horiAdvance >> 6;
 
     // x_, y_, width_ и height_ устанавливаются позже в BFGenerator::PackGlyph().
+}
+
+// Код написан на основе функции FontFaceFreeType::Load() движка.
+// Кернинг виден между символами AV (они должны быть расположены близко).
+void BFGenerator::StoreKerning()
+{
+    if (!FT_HAS_KERNING(face_))
+        return;
+
+    // Получаем размер памяти, занимаемой таблицами (их может быть несколько).
+    FT_ULong tagKern = FT_MAKE_TAG('k', 'e', 'r', 'n');
+    FT_ULong memLength = 0;
+    FT_Error error = FT_Load_Sfnt_Table(face_, tagKern, 0, 0, &memLength);
+
+    if (error)
+        return;
+
+    // Загружаем таблицы.
+    SharedArrayPtr<unsigned char> kernData(new unsigned char[memLength]);
+    error = FT_Load_Sfnt_Table(face_, tagKern, 0, kernData, &memLength);
+
+    if (error)
+        return;
+
+    // Преобразуем big endian в little endian.
+    for (unsigned i = 0; i < memLength; i += 2)
+        Swap(kernData[i], kernData[i + 1]);
+
+    // Читаем версию.
+    MemoryBuffer deserializer(kernData, (unsigned)memLength);
+    unsigned short version = deserializer.ReadUShort();
+
+    if (version != 0)
+        return;
+
+    // Невозможно получить код символа по индексу (нет однозначного соответствия),
+    // поэтому нужно создать таблицу самостоятельно.
+    int numGlyphs = face_->num_glyphs;
+    PODVector<unsigned> charCodes(numGlyphs);
+    
+    for (int i = 0; i < count_; ++i)
+        charCodes[i] = 0;
+
+    FT_UInt glyphIndex;
+    FT_ULong charCode = FT_Get_First_Char(face_, &glyphIndex);
+    
+    while (glyphIndex != 0)
+    {
+        charCodes[glyphIndex] = (unsigned)charCode;
+        charCode = FT_Get_Next_Char(face_, charCode, &glyphIndex);
+    }
+
+    // Число таблиц.
+    unsigned numKerningTables = deserializer.ReadUShort();
+
+    XMLElement kerningsElement = xmlFile_->GetOrCreateRoot("font").CreateChild("kernings");
+    
+    // Общее число пар.
+    int numPairs = 0;
+
+    for (unsigned i = 0; i < numKerningTables; ++i)
+    {
+        unsigned short version = deserializer.ReadUShort();
+        unsigned short length = deserializer.ReadUShort();
+        unsigned short coverage = deserializer.ReadUShort();
+
+        // Такой тип таблицы не поддерживается, пропускаем её.
+        if (version != 0 || coverage != 1)
+            continue;
+
+        unsigned numKerningPairs = deserializer.ReadUShort();
+        
+        // Пропуск searchRange, entrySelector и rangeShift.
+        deserializer.Seek((unsigned)(deserializer.GetPosition() + 3 * sizeof(unsigned short)));
+
+        for (unsigned j = 0; j < numKerningPairs; ++j)
+        {
+            unsigned leftIndex = deserializer.ReadUShort();
+            unsigned leftCharCode = charCodes[leftIndex];
+            unsigned rightIndex = deserializer.ReadUShort();
+            unsigned rightCharCode = charCodes[rightIndex];
+
+            //short amount = RoundToPixels(deserializer.ReadShort());
+            // Я не знаю, почему это работает в движке для ttf шрифтов.
+            // Может быть это связано с тем, что я задаю размер шрифта в пикселях, а не в пунктах.
+            // Поэтому определяю иначе.
+            // На данном этапе мы узнали, что между символами есть кернинг
+            // (просто перебирать все пары символов - это дикий брутфорс).
+            // А теперь используем стандартную функцию.
+            FT_Vector akerning;
+            FT_Get_Kerning(face_, leftIndex, rightIndex, FT_KERNING_DEFAULT, &akerning);
+            short amount = RoundToPixels(akerning.x);
+
+            // Не забываем учитывать увеличенный масштаб для SDF-шрифта.
+            amount /= scale_;
+
+            // Кернинг так мал, что после округления стал нулевым. Не сохраняем.
+            if (amount == 0)
+                continue;
+
+            XMLElement childElement = kerningsElement.CreateChild("kerning");
+            childElement.SetAttribute("first", String(leftCharCode));
+            childElement.SetAttribute("second", String(rightCharCode));
+            childElement.SetAttribute("amount", String(amount));
+
+            ++numPairs;
+        }
+    }
+
+    kerningsElement.SetAttribute("count", String(numPairs));
 }

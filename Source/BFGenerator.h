@@ -142,10 +142,13 @@ private:
     // Вставляет одно изображение в другое.
     void Blit(Image* dest, int x, int y, int width, int height, Image* source, int sourceX, int sourceY);
 
-    // Опредляет метрики шрифта. Устанавливает не все метрики,
+    // Определяет метрики шрифта. Устанавливает не все метрики,
     // а только lineHeight_, xOffset_, yOffset_ и xAdvance_.
     void CalculateMetrics();
 
-    // Записывает метрики текущего глифа в XML-файл.
-    void SaveGlyph();
+    // Добавляет метрики текущего глифа в xmlFile_.
+    void StoreGlyph();
+
+    // Добавляет кернинг текущего шрифта в xmlFile_.
+    void StoreKerning();
 };
