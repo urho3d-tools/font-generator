@@ -5,7 +5,7 @@ License: Public Domain
 ## SDF
 
 1) SDF generator uses true brute force on GPU for maximum quality. Currently exists only GLSL shader for it:
-https://github.com/1vanK/Urho3DBitmapFontGenerator/blob/master/Bin/MyData/Shaders/GLSL/SdfCalculator.glsl
+https://github.com/1vanK/Urho3DBitmapFontGenerator/blob/master/built/AppData/Shaders/GLSL/SdfCalculator.glsl
 
 2) SDF fonts render with large scale and after it downscaled to required size. You can decrease "Scale" parameter to fast generation or increase to improve quality.
 
